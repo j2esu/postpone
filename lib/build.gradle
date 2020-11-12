@@ -7,7 +7,7 @@ plugins {
 
 def libraryGroupId = 'su.j2e'
 def libraryArtifactId = 'postpone'
-def libraryVersion = '1.0.0-rc2'
+def libraryVersion = '1.0.0-rc3'
 def libraryRepo = 'maven'
 def libraryDesc = 'Library to easily manage fragment transitions postponement'
 
@@ -17,6 +17,7 @@ afterEvaluate {
             // Creates a Maven publication called "release".
             release(MavenPublication) {
                 from components.release
+                artifact sourcesJar
                 groupId = libraryGroupId
                 artifactId = libraryArtifactId
                 version = libraryVersion
@@ -74,6 +75,12 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+}
+
+task sourcesJar(type: Jar) {
+    from android.sourceSets.main.java.srcDirs
+    //noinspection GrDeprecatedAPIUsage
+    classifier = 'sources'
 }
 
 dependencies {
