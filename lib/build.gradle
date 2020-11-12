@@ -1,6 +1,51 @@
 plugins {
     id 'com.android.library'
     id 'kotlin-android'
+    id 'com.jfrog.bintray'
+    id 'maven-publish'
+}
+
+def libraryGroupId = 'su.j2e'
+def libraryArtifactId = 'postpone'
+def libraryVersion = '1.0.0-rc2'
+def libraryRepo = 'maven'
+def libraryDesc = 'Library to easily manage fragment transitions postponement'
+
+afterEvaluate {
+    publishing {
+        publications {
+            // Creates a Maven publication called "release".
+            release(MavenPublication) {
+                from components.release
+                groupId = libraryGroupId
+                artifactId = libraryArtifactId
+                version = libraryVersion
+            }
+        }
+    }
+}
+
+Properties localProperties = new Properties()
+localProperties.load(project.rootProject.file('local.properties').newDataInputStream())
+
+bintray {
+    user = localProperties['bintray.user']
+    key = localProperties['bintray.token']
+    publications = ['release']
+    publish = true
+    override = true
+    pkg {
+        repo = libraryRepo
+        name = libraryArtifactId
+        desc = libraryDesc
+        licenses = ['Apache-2.0']
+        vcsUrl = 'https://github.com/j2esu/postpone.git'
+        publicDownloadNumbers = true
+        version {
+            name = libraryVersion
+            released = new Date()
+        }
+    }
 }
 
 android {

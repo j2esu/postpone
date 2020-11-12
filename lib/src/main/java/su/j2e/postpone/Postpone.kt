@@ -17,6 +17,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
+import kotlin.math.max
 
 interface Postponable {
     val postponement: Postponement
@@ -61,16 +62,14 @@ fun <T> FragmentManager.postponeTransition(postponableFragment: T) where T : Fra
 }
 
 fun Fragment.postponeUntilViewCreated(
-    timeoutMs: Long = 500,
-    extraDelay: Long = 100,
-    postponeFunc: suspend () -> Unit = {}
+    timeoutMs: Long = 500, extraDelay: Long = 100, postponeFunc: suspend () -> Unit = {}
 ): Postponement {
     val postponement = PostponementImp()
     viewLifecycleOwnerLiveData.asFlow()
         .filterNotNull()
         .onEach {
             it.whenCreated {
-                postponement.endAfter(timeoutMs) {
+                postponement.endAfter(timeoutMs + extraDelay) {
                     postponeFunc()
                     delay(extraDelay)
                 }
