@@ -1,8 +1,11 @@
 package su.j2e.postpone
 
 import android.content.Context
+import android.view.ViewGroup
+import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
+import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.lifecycleScope
@@ -17,25 +20,53 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
-import kotlin.math.max
 
+/**
+ * Indicates that component can have postponed behavior. For example, [Fragment] can be
+ * postponed until view is ready for transitions (i.e. initial data is loaded).
+ *
+ * You can either control postponement manually via [ControlledPostponement] or use component specific
+ * helpers, e.g. [postponeUntilViewCreated]
+ *
+ * @see Postponement
+ * @see postponeControlled
+ */
 interface Postponable {
     val postponement: Postponement
 }
 
+/**
+ * Allows to send postpone [request] and work with postponement status, e.g. check [postponed]
+ * or [await] when postponed stuff is ready
+ */
 interface Postponement {
     val postponed: Boolean
-    fun start()
+    fun request()
     suspend fun await()
 }
 
+/**
+ * [Postponement] with manual control. Call [done] to notify that postponed stuff is ready. Use
+ * [postponeControlled] to create instances of default implementation
+ */
 interface ControlledPostponement : Postponement {
-    fun end()
+    fun done()
 }
 
+/**
+ * Postpones enter fragment transition by calling [Fragment.postponeEnterTransition] immediately and invoking
+ * [Fragment.startPostponedEnterTransition] when [Postponable.postponement] is ready.
+ *
+ * Supports nested fragments by following logic:
+ * - if current fragment is added (i.e. it's a *source* in transition), then just request postpone
+ * on all children (recursive)
+ * - if current fragment is not added (i.e. it's a *target* in transition), then register fragment lifecycle
+ * callback and request postpone on all newly attached children (recursive) until `onStart`.
+ * So be careful with [awaitChildren] in parent fragments (see docs for details)
+ */
 fun Fragment.postponeTransition(postponable: Postponable, fm: FragmentManager) {
     postponeEnterTransition()
-    postponable.postponement.start()
+    postponable.postponement.request()
     if (isAdded) {
         forEachChildRec { it.tryPostpone() }
     } else {
@@ -53,14 +84,32 @@ fun Fragment.postponeTransition(postponable: Postponable, fm: FragmentManager) {
     }
     lifecycleScope.launch {
         postponable.postponement.await()
-        startPostponedEnterTransition()
+        (view?.parent as? ViewGroup)?.let {
+            it.doOnPreDraw {
+                startPostponedEnterTransition()
+            }
+            it.invalidate()
+        }
     }
 }
 
+/**
+ * Convenient wrapper for [Fragment.postponeTransition] to postpone transition of a [Fragment] which is also
+ * implements [Postponable]
+ */
 fun <T> FragmentManager.postponeTransition(postponableFragment: T) where T : Fragment, T : Postponable {
     postponableFragment.postponeTransition(postponableFragment, this)
 }
 
+/**
+ * Postpones fragment until view created and optional [postponeFunc] completed.
+ *
+ * [extraDelay] will be performed after [postponeFunc] execution with timeout specified by [timeoutMs].
+ * Extra delay will not be affected by timeout, so max possible delay is `[timeout + extra delay]`
+ *
+ * @see [awaitValue]
+ * @see [awaitChildren]
+ */
 fun Fragment.postponeUntilViewCreated(
     timeoutMs: Long = 500, extraDelay: Long = 100, postponeFunc: suspend () -> Unit = {}
 ): Postponement {
@@ -79,12 +128,31 @@ fun Fragment.postponeUntilViewCreated(
     return postponement
 }
 
-fun Fragment.postponeControlled(): ControlledPostponement = PostponementImp()
+/**
+ * Creates an instance of default [ControlledPostponement] implementation
+ */
+fun postponeControlled(): ControlledPostponement = PostponementImp()
 
+/**
+ * Awaits first value from [LiveData]
+ */
 suspend fun LiveData<*>.awaitValue() {
     asFlow().first()
 }
 
+/**
+ * Awaits all [Postponable] children, which are currently added to this [FragmentManager]
+ *
+ * **NOTE:** make sure that all fragments that required for postponement are added to fragment manager
+ * before calling this function! Otherwise they will not affect postponement
+ *
+ * For first child fragment initialization [FragmentTransaction.commitNow] can be useful. It guarantees that
+ * fragment is added and created after this function returns, so it has already received proper postpone
+ * status in `onAttach`. Read more about nested fragments support in [postponeTransition] docs
+ *
+ * Also you can await children after `onCreateView`, if they were added during `onCreate` cause they are
+ * always added by view creation phase
+ */
 suspend fun FragmentManager.awaitChildren() {
     fragments.forEach {
         (it as? Postponable)?.postponement?.await()
@@ -98,11 +166,11 @@ private class PostponementImp : ControlledPostponement {
     override var postponed = false
         private set
 
-    override fun start() {
+    override fun request() {
         postponed = true
     }
 
-    override fun end() {
+    override fun done() {
         awaits.forEach { it.resume(Unit) }
         awaits.clear()
         postponed = false
@@ -120,12 +188,12 @@ private class PostponementImp : ControlledPostponement {
     suspend fun endAfter(timeoutMs: Long, func: suspend () -> Unit) {
         if (postponed) {
             withTimeoutOrNull(timeoutMs) { func() }
-            end()
+            done()
         }
     }
 }
 
-private fun Fragment.tryPostpone() = (this as? Postponable)?.postponement?.start()
+private fun Fragment.tryPostpone() = (this as? Postponable)?.postponement?.request()
 
 private fun Fragment.forEachChildRec(action: (Fragment) -> Unit) {
     childFragmentManager.fragments.forEach {
