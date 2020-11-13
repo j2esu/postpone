@@ -54,6 +54,17 @@ interface ControlledPostponement : Postponement {
 }
 
 /**
+ * Helper to call [ControlledPostponement.done] after [func] execution with given [timeoutMs].
+ * Note, that [func] will not be executed, if postponement is not postponed
+ */
+suspend fun ControlledPostponement.doneAfter(timeoutMs: Long, func: suspend () -> Unit) {
+    if (postponed) {
+        withTimeoutOrNull(timeoutMs) { func() }
+        done()
+    }
+}
+
+/**
  * Postpones enter fragment transition by calling [Fragment.postponeEnterTransition] immediately and invoking
  * [Fragment.startPostponedEnterTransition] when [Postponable.postponement] is ready.
  *
@@ -89,7 +100,7 @@ fun Fragment.postponeTransition(postponable: Postponable, fm: FragmentManager) {
                 startPostponedEnterTransition()
             }
             it.invalidate()
-        }
+        } ?: startPostponedEnterTransition()
     }
 }
 
@@ -118,7 +129,7 @@ fun Fragment.postponeUntilViewCreated(
         .filterNotNull()
         .onEach {
             it.whenCreated {
-                postponement.endAfter(timeoutMs + extraDelay) {
+                postponement.doneAfter(timeoutMs + extraDelay) {
                     postponeFunc()
                     delay(extraDelay)
                 }
@@ -159,6 +170,13 @@ suspend fun FragmentManager.awaitChildren() {
     }
 }
 
+/**
+ * Waits until [Fragment] `created` and postponement ready (if fragment is [Postponable])
+ */
+suspend fun Fragment.awaitReady() {
+    whenCreated { (this@awaitReady as? Postponable)?.postponement?.await() }
+}
+
 private class PostponementImp : ControlledPostponement {
 
     private val awaits = mutableSetOf<Continuation<Unit>>()
@@ -184,16 +202,11 @@ private class PostponementImp : ControlledPostponement {
             }
         }
     }
-
-    suspend fun endAfter(timeoutMs: Long, func: suspend () -> Unit) {
-        if (postponed) {
-            withTimeoutOrNull(timeoutMs) { func() }
-            done()
-        }
-    }
 }
 
-private fun Fragment.tryPostpone() = (this as? Postponable)?.postponement?.request()
+private fun Any.tryPostpone() {
+    (this as? Postponable)?.postponement?.request()
+}
 
 private fun Fragment.forEachChildRec(action: (Fragment) -> Unit) {
     childFragmentManager.fragments.forEach {
@@ -203,12 +216,16 @@ private fun Fragment.forEachChildRec(action: (Fragment) -> Unit) {
 }
 
 private fun Fragment.doOnAttach(fm: FragmentManager, action: () -> Unit) {
-    fm.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
-        override fun onFragmentAttached(fm: FragmentManager, f: Fragment, context: Context) {
-            if (f == this@doOnAttach) {
-                action()
-                fm.unregisterFragmentLifecycleCallbacks(this)
+    if (fm.fragments.any { it == this }) {
+        action()
+    } else {
+        fm.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
+            override fun onFragmentAttached(fm: FragmentManager, f: Fragment, context: Context) {
+                if (f == this@doOnAttach) {
+                    action()
+                    fm.unregisterFragmentLifecycleCallbacks(this)
+                }
             }
-        }
-    }, false)
+        }, false)
+    }
 }
