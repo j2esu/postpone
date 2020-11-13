@@ -7,14 +7,13 @@ plugins {
 
 def libraryGroupId = 'su.j2e'
 def libraryArtifactId = 'postpone'
-def libraryVersion = '1.0.0-rc5'
+def libraryVersion = '1.0.0-rc6'
 def libraryRepo = 'maven'
 def libraryDesc = 'Library to easily manage fragment transitions postponement'
 
 afterEvaluate {
     publishing {
         publications {
-            // Creates a Maven publication called "release".
             release(MavenPublication) {
                 from components.release
                 artifact sourcesJar
