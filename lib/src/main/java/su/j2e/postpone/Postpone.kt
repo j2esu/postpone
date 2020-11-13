@@ -10,14 +10,11 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.whenCreated
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
@@ -48,20 +45,41 @@ interface Postponement {
 /**
  * [Postponement] with manual control. Call [done] to notify that postponed stuff is ready. Use
  * [postponeControlled] to create instances of default implementation
+ *
+ * @see postponeIn
+ * @see doneAfter
  */
 interface ControlledPostponement : Postponement {
     fun done()
 }
 
 /**
- * Helper to call [ControlledPostponement.done] after [func] execution with given [timeoutMs].
- * Note, that [func] will not be executed, if postponement is not postponed
+ * Helper to call [ControlledPostponement.done] after [postponeFunc] execution with given [timeoutMs].
+ * Note, that [postponeFunc] will not be executed, if postponement is not postponed.
+ *
+ * @see postponeIn
  */
-suspend fun ControlledPostponement.doneAfter(timeoutMs: Long, func: suspend () -> Unit) {
+suspend fun ControlledPostponement.doneAfter(
+    timeoutMs: Long = DEFAULT_TIMEOUT, postponeFunc: suspend () -> Unit
+) {
     if (postponed) {
-        withTimeoutOrNull(timeoutMs) { func() }
+        withTimeoutOrNull(timeoutMs) { postponeFunc() }
         done()
     }
+}
+
+/**
+ * Launches new coroutine in given [scope] and calls [ControlledPostponement.doneAfter] with given [timeoutMs]
+ * and [postponeFunc]
+ *
+ * @see awaitValue
+ * @see awaitReady
+ * @see awaitChildren
+ */
+suspend fun ControlledPostponement.postponeIn(
+    scope: CoroutineScope, timeoutMs: Long = DEFAULT_TIMEOUT, postponeFunc: suspend () -> Unit
+) {
+    scope.launch { doneAfter(timeoutMs, postponeFunc) }
 }
 
 /**
@@ -120,9 +138,10 @@ fun <T> FragmentManager.postponeTransition(postponableFragment: T) where T : Fra
  *
  * @see [awaitValue]
  * @see [awaitChildren]
+ * @see awaitReady
  */
 fun Fragment.postponeUntilViewCreated(
-    timeoutMs: Long = 500, extraDelay: Long = 100, postponeFunc: suspend () -> Unit = {}
+    timeoutMs: Long = DEFAULT_TIMEOUT, extraDelay: Long = 100, postponeFunc: suspend () -> Unit = {}
 ): Postponement {
     val postponement = PostponementImp()
     viewLifecycleOwnerLiveData.asFlow()
@@ -176,6 +195,8 @@ suspend fun FragmentManager.awaitChildren() {
 suspend fun Fragment.awaitReady() {
     whenCreated { (this@awaitReady as? Postponable)?.postponement?.await() }
 }
+
+private const val DEFAULT_TIMEOUT = 500L
 
 private class PostponementImp : ControlledPostponement {
 
