@@ -76,7 +76,7 @@ suspend fun ControlledPostponement.doneAfter(
  * @see awaitReady
  * @see awaitChildren
  */
-suspend fun ControlledPostponement.postponeIn(
+fun ControlledPostponement.postponeIn(
     scope: CoroutineScope, timeoutMs: Long = DEFAULT_TIMEOUT, postponeFunc: suspend () -> Unit
 ) {
     scope.launch { doneAfter(timeoutMs, postponeFunc) }
