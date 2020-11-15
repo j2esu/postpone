@@ -6,10 +6,7 @@ import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentTransaction
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.asFlow
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.whenCreated
+import androidx.lifecycle.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -22,11 +19,8 @@ import kotlin.coroutines.resume
  * Indicates that component can have postponed behavior. For example, [Fragment] can be
  * postponed until view is ready for transitions (i.e. initial data is loaded).
  *
- * You can either control postponement manually via [ControlledPostponement] or use component specific
- * helpers, e.g. [postponeUntilViewCreated]
- *
- * @see Postponement
- * @see postponeControlled
+ * You can control [Postponement] manually via [ControlledPostponement] or using component-specific
+ * helpers, e.g. [Fragment.postponeUntilViewCreated] or [LifecycleOwner.postponeControlled]
  */
 interface Postponable {
     val postponement: Postponement
@@ -44,7 +38,7 @@ interface Postponement {
 
 /**
  * [Postponement] with manual control. Call [done] to notify that postponed stuff is ready. Use
- * [postponeControlled] to create instances of default implementation
+ * *ControlledPostponement()* function to create instances of default implementation
  *
  * @see postponeIn
  * @see doneAfter
@@ -159,9 +153,26 @@ fun Fragment.postponeUntilViewCreated(
 }
 
 /**
- * Creates an instance of default [ControlledPostponement] implementation
+ * Creates [ControlledPostponement] and launches new coroutine in given [LifecycleOwner], which ensures
+ * [ControlledPostponement.done] is called after specified [timeoutMs]
  */
-fun postponeControlled(): ControlledPostponement = PostponementImp()
+fun LifecycleOwner.postponeControlled(timeoutMs: Long = DEFAULT_TIMEOUT): ControlledPostponement {
+    val postponement = PostponementImp()
+    lifecycleScope.launch {
+        delay(timeoutMs)
+        postponement.done()
+    }
+    return postponement
+}
+
+/**
+ * Creates an instance of default [ControlledPostponement] implementation. You fully responsible for calling
+ * [ControlledPostponement.done] after postponed stuff ready
+ *
+ * @see ControlledPostponement
+ */
+@Suppress("FunctionName")
+fun ControlledPostponement(): ControlledPostponement = PostponementImp()
 
 /**
  * Awaits first value from [LiveData]
@@ -210,9 +221,11 @@ private class PostponementImp : ControlledPostponement {
     }
 
     override fun done() {
-        awaits.forEach { it.resume(Unit) }
-        awaits.clear()
-        postponed = false
+        if (postponed) {
+            awaits.forEach { it.resume(Unit) }
+            awaits.clear()
+            postponed = false
+        }
     }
 
     override suspend fun await() {
