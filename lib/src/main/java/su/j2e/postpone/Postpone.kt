@@ -87,7 +87,7 @@ fun ControlledPostponement.postponeIn(
  * callback and request postpone on all newly attached children (recursive) until `onStart`.
  * So be careful with [awaitChildren] in parent fragments (see docs for details)
  */
-fun Fragment.postponeTransition(postponable: Postponable, fm: FragmentManager) {
+fun Fragment.postponeTransition(fm: FragmentManager, postponable: Postponable = (this as Postponable)) {
     postponeEnterTransition()
     postponable.postponement.request()
     if (isAdded) {
@@ -114,14 +114,6 @@ fun Fragment.postponeTransition(postponable: Postponable, fm: FragmentManager) {
             it.invalidate()
         } ?: startPostponedEnterTransition()
     }
-}
-
-/**
- * Convenient wrapper for [Fragment.postponeTransition] to postpone transition of a [Fragment] which is also
- * implements [Postponable]
- */
-fun <T> FragmentManager.postponeTransition(postponableFragment: T) where T : Fragment, T : Postponable {
-    postponableFragment.postponeTransition(postponableFragment, this)
 }
 
 /**
