@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
+import androidx.fragment.app.FragmentOnAttachListener
 import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
@@ -139,7 +140,7 @@ fun Fragment.postponeUntilViewCreated(
 ): Postponement {
     val postponement = PostponementImp()
     viewLifecycleOwnerLiveData.observe(this) { owner ->
-        owner?.lifecycleScope?.launchWhenStarted {
+        owner?.lifecycleScope?.launchWhenCreated {
             postponement.doneAfter(timeoutMs + extraDelay) {
                 postponeFunc()
                 delay(extraDelay)
@@ -243,13 +244,13 @@ private fun Fragment.doOnAttach(fm: FragmentManager, action: () -> Unit) {
     if (fm.fragments.any { it == this }) {
         action()
     } else {
-        fm.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
-            override fun onFragmentAttached(fm: FragmentManager, f: Fragment, context: Context) {
+        fm.addFragmentOnAttachListener(object : FragmentOnAttachListener {
+            override fun onAttachFragment(fragmentManager: FragmentManager, f: Fragment) {
                 if (f == this@doOnAttach) {
                     action()
-                    fm.unregisterFragmentLifecycleCallbacks(this)
+                    fm.removeFragmentOnAttachListener(this)
                 }
             }
-        }, false)
+        })
     }
 }
