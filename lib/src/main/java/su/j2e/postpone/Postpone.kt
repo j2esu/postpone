@@ -6,12 +6,10 @@ import androidx.core.view.doOnPreDraw
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentTransaction
-import androidx.lifecycle.*
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.whenCreated
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
@@ -66,7 +64,6 @@ suspend fun ControlledPostponement.doneAfter(
  * Launches new coroutine in given [scope] and calls [ControlledPostponement.doneAfter] with given [timeoutMs]
  * and [postponeFunc]
  *
- * @see awaitValue
  * @see awaitReady
  * @see awaitChildren
  */
@@ -117,12 +114,23 @@ fun Fragment.postponeTransition(fm: FragmentManager, postponable: Postponable = 
 }
 
 /**
+ * Wrapper to call [Fragment.postponeTransition] on each fragment in [fragments]
+ *
+ * @return same object for future calls
+ */
+fun FragmentManager.postponeTransition(vararg fragments: Fragment): FragmentManager {
+    fragments.forEach {
+        it.postponeTransition(this)
+    }
+    return this
+}
+
+/**
  * Postpones fragment until view created and optional [postponeFunc] completed.
  *
  * [extraDelay] will be performed after [postponeFunc] execution with timeout specified by [timeoutMs].
  * Extra delay will not be affected by timeout, so max possible delay is `[timeout + extra delay]`
  *
- * @see [awaitValue]
  * @see [awaitChildren]
  * @see awaitReady
  */
@@ -130,17 +138,14 @@ fun Fragment.postponeUntilViewCreated(
     timeoutMs: Long = DEFAULT_TIMEOUT, extraDelay: Long = 100, postponeFunc: suspend () -> Unit = {}
 ): Postponement {
     val postponement = PostponementImp()
-    viewLifecycleOwnerLiveData.asFlow()
-        .filterNotNull()
-        .onEach {
-            it.whenCreated {
-                postponement.doneAfter(timeoutMs + extraDelay) {
-                    postponeFunc()
-                    delay(extraDelay)
-                }
+    viewLifecycleOwnerLiveData.observe(this) { owner ->
+        owner?.lifecycleScope?.launchWhenStarted {
+            postponement.doneAfter(timeoutMs + extraDelay) {
+                postponeFunc()
+                delay(extraDelay)
             }
         }
-        .launchIn(lifecycleScope)
+    }
     return postponement
 }
 
@@ -165,13 +170,6 @@ fun LifecycleOwner.postponeControlled(timeoutMs: Long = DEFAULT_TIMEOUT): Contro
  */
 @Suppress("FunctionName")
 fun ControlledPostponement(): ControlledPostponement = PostponementImp()
-
-/**
- * Awaits first value from [LiveData]
- */
-suspend fun LiveData<*>.awaitValue() {
-    asFlow().first()
-}
 
 /**
  * Awaits all [Postponable] children, which are currently added to this [FragmentManager]
