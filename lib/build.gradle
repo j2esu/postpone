@@ -25,6 +25,13 @@ afterEvaluate {
     }
 }
 
+// for release-android-library (gradlew clean build generateRelease)
+ext {
+    PUBLISH_GROUP_ID = 'su.j2e'
+    PUBLISH_ARTIFACT_ID = 'postpone'
+    PUBLISH_VERSION = '1.0.0-rc-13'
+}
+
 Properties localProperties = new Properties()
 localProperties.load(project.rootProject.file('local.properties').newDataInputStream())
 
@@ -90,3 +97,5 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.2.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.4.3'
 }
+
+apply from: 'https://raw.githubusercontent.com/blundell/release-android-library/master/android-release-aar.gradle'
