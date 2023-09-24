@@ -1,10 +1,1 @@
-# Postpone!
-Library to easily manage fragment transitions postponement
-
-## Add to project using Gradle
-
-```
-dependencies {
-    implementation 'su.j2e:postpone:<latest_version>'
-}
-```
+[![](https://jitpack.io/v/j2esu/postpone.svg)](https://jitpack.io/#j2esu/postpone)
