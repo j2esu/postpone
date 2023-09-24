@@ -9,8 +9,13 @@ import androidx.fragment.app.FragmentOnAttachListener
 import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.whenCreated
-import kotlinx.coroutines.*
+import androidx.lifecycle.withCreated
+import androidx.lifecycle.withStarted
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
@@ -98,7 +103,8 @@ fun Fragment.postponeTransition(fm: FragmentManager, postponable: Postponable = 
                 }
             }
             childFragmentManager.registerFragmentLifecycleCallbacks(callbacks, true)
-            lifecycleScope.launchWhenStarted {
+            lifecycleScope.launch {
+                withStarted { }
                 childFragmentManager.unregisterFragmentLifecycleCallbacks(callbacks)
             }
         }
@@ -119,9 +125,9 @@ fun Fragment.postponeTransition(fm: FragmentManager, postponable: Postponable = 
  *
  * @return same object for future calls
  */
-fun FragmentManager.postponeTransition(vararg fragments: Fragment): FragmentManager {
+fun FragmentManager.postponeTransition(vararg fragments: Fragment?): FragmentManager {
     fragments.forEach {
-        it.postponeTransition(this)
+        it?.postponeTransition(this)
     }
     return this
 }
@@ -140,7 +146,8 @@ fun Fragment.postponeUntilViewCreated(
 ): Postponement {
     val postponement = PostponementImp()
     viewLifecycleOwnerLiveData.observe(this) { owner ->
-        owner?.lifecycleScope?.launchWhenCreated {
+        owner?.lifecycleScope?.launch {
+            withCreated { }
             postponement.doneAfter(timeoutMs + extraDelay) {
                 postponeFunc()
                 delay(extraDelay)
@@ -169,7 +176,6 @@ fun LifecycleOwner.postponeControlled(timeoutMs: Long = DEFAULT_TIMEOUT): Contro
  *
  * @see ControlledPostponement
  */
-@Suppress("FunctionName")
 fun ControlledPostponement(): ControlledPostponement = PostponementImp()
 
 /**
@@ -195,7 +201,8 @@ suspend fun FragmentManager.awaitChildren() {
  * Waits until [Fragment] `created` and postponement ready (if fragment is [Postponable])
  */
 suspend fun Fragment.awaitReady() {
-    whenCreated { (this@awaitReady as? Postponable)?.postponement?.await() }
+    withCreated { }
+    (this@awaitReady as? Postponable)?.postponement?.await()
 }
 
 private const val DEFAULT_TIMEOUT = 500L

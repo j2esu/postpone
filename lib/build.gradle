@@ -3,7 +3,6 @@ plugins {
     id 'kotlin-android'
 }
 
-// for release-android-library (gradlew clean build generateRelease)
 ext {
     PUBLISH_GROUP_ID = 'su.j2e'
     PUBLISH_ARTIFACT_ID = 'postpone'
@@ -11,15 +10,14 @@ ext {
 }
 
 android {
-    compileSdkVersion 30
-
+    namespace = "su.j2e.postpone"
+    compileSdk 34
     defaultConfig {
-        minSdkVersion 16
-        targetSdkVersion 30
+        minSdkVersion 21
+        targetSdkVersion 34
         versionCode 1
         versionName "1.0"
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
     }
 
@@ -29,22 +27,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
     kotlinOptions {
         jvmTarget = '1.8'
     }
 }
 
 dependencies {
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
-
-    implementation 'androidx.fragment:fragment-ktx:1.3.2'
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.4.3'
+    implementation 'androidx.fragment:fragment-ktx:1.6.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 }
-
-apply from: 'https://raw.githubusercontent.com/blundell/release-android-library/master/android-release-aar.gradle'
