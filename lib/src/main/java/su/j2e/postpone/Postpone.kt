@@ -228,7 +228,7 @@ private class PostponementImp : ControlledPostponement {
 
     override suspend fun await() {
         if (postponed) {
-            suspendCancellableCoroutine<Unit> { cont ->
+            suspendCancellableCoroutine { cont ->
                 awaits.add(cont)
                 cont.invokeOnCancellation { awaits.remove(cont) }
             }
